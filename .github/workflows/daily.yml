@@ -79,8 +79,10 @@ jobs:
         timeout-minutes: 45
         env:
           MUSIC_MODE: synth
-          KOKORO_VOICE: am_michael       # gehri calm narrator awaaz (am_adam / bm_george bhi chal jaati hain)
-          EDGE_VOICE: en-US-GuyNeural    # Kokoro fail ho to backup awaaz
+          VOICE_LANG: hi                 # Hindi-Urdu (Hindustani). English wapas chahiye to: en
+          EDGE_VOICE: hi-IN-MadhurNeural # pehli awaaz (saaf, mard). Doosri: hi-IN-SwaraNeural (aurat)
+          KOKORO_VOICE: hm_omega         # backup awaaz (hm_psi / hf_alpha / hf_beta bhi chalti hain)
+          CAPTION_SCRIPT: roman          # screen par Roman Urdu; Devanagari chahiye to: devanagari
           VOICE_SPEED: "1.0"             # video 60-80s ki banti hai; bahar jaye to 0.95-1.1 try karo
           IMG_BUDGET_SEC: "600"          # images ke liye max 10 min, baaki scenes fallback se
           DEPTH_MODEL: depth-anything/Depth-Anything-V2-Small-hf   # CPU par ~1-3 s/image, har location par sirf ek baar; fail ho to synthetic depth
