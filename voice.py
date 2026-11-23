@@ -9,15 +9,9 @@ import wave
 import numpy as np
 
 SR = 24000
-# Bhasha: hi = Hindi-Urdu (Hindustani). Bolne wala text Devanagari mein hota hai (TTS isi ko behtar padhta hai),
-# captions Roman Urdu mein (CAPTION_SCRIPT=roman) ya Devanagari mein (CAPTION_SCRIPT=devanagari). en = purani English video.
-LANG = os.environ.get("VOICE_LANG", "hi").lower()
-CAPTION_SCRIPT = os.environ.get("CAPTION_SCRIPT", "roman").lower()
-KOKORO_LANG = {"hi": "h", "en": "a"}.get(LANG, "a")
-VOICE = os.environ.get("KOKORO_VOICE", "hm_omega" if LANG == "hi" else "am_adam")   # Hindi: hm_omega / hm_psi (male), hf_alpha / hf_beta (female)
-SPEED = float(os.environ.get("VOICE_SPEED", "1.0" if LANG == "hi" else "1.03"))     # thoda dheema = saaf
-EDGE_VOICE = os.environ.get("EDGE_VOICE", "hi-IN-MadhurNeural" if LANG == "hi" else "en-US-AndrewNeural")
-DEV = "\u0900-\u097F"                                          # Devanagari block (matras/halant bhi isi mein hain)
+VOICE = os.environ.get("KOKORO_VOICE", "am_adam")
+SPEED = float(os.environ.get("VOICE_SPEED", "1.03"))          # 1.08 par lafz dab jaate the -> thoda dheema = saaf
+EDGE_VOICE = os.environ.get("EDGE_VOICE", "en-US-AndrewNeural")
 _pipe = None
 
 # Kokoro (misaki) ke liye saaf talaffuz: [lafz](/phonemes/). Default American "water" mein 't' flap ('d' jaisa) ho jata hai.
@@ -31,8 +25,6 @@ _PRON_RE = re.compile(r"\b(" + "|".join(sorted(map(re.escape, PRON), key=len, re
 
 
 def _kokoro_markup(text):
-    if LANG != "en":                                              # PRON sirf English lafzon ke liye hai
-        return text
     return _PRON_RE.sub(lambda m: f"[{m.group(0)}](/{PRON[m.group(0).lower()]}/)", text)
 
 
@@ -40,12 +32,10 @@ def clean_text(text):
     """TTS ko ulta-seedha karne wali cheezein hataata hai: emoji, markdown, '...', '—', '!!', adhoori punctuation."""
     t = unicodedata.normalize("NFKC", text)
     t = t.replace("\u2018", "'").replace("\u2019", "'").replace("\u201c", '"').replace("\u201d", '"')
-    t = t.replace("\u0964", ".").replace("\u0965", ".")                # Hindi poorn viram (danda) -> full stop
-    t = t.replace("\u200c", "").replace("\u200d", "")
     t = re.sub(r"[\u2013\u2014]+", ", ", t)
     t = re.sub(r"\s-\s", ", ", t)
     t = t.replace("&", " and ").replace("%", " percent").replace("/", " ")
-    t = re.sub(r"[^\w\s" + DEV + r".,!?;:'\"()\-$]", " ", t)       # emoji / markdown / ajeeb symbols (Devanagari matras bachte hain)
+    t = re.sub(r"[^\w\s.,!?;:'\"()\-$]", " ", t)                 # emoji / markdown / ajeeb symbols
     lines = []
     for ln in t.split("\n"):
         ln = re.sub(r"\s*\.{2,}\s*", ", ", ln)                    # "..." -> chhota saaf pause
@@ -79,7 +69,7 @@ def _kokoro(text, path):
     from kokoro import KPipeline
     import soundfile as sf
     if _pipe is None:
-        _pipe = KPipeline(lang_code=KOKORO_LANG)
+        _pipe = KPipeline(lang_code="a")
     gap = np.zeros(int(0.08 * SR), np.float32)
 
     def run(t):
@@ -129,12 +119,7 @@ ENGINES = {"kokoro": _kokoro, "edge": _edge, "fake": _fake}
 
 def engines():
     forced = os.environ.get("VOICE_ENGINE", "").lower()
-    if forced in ENGINES:
-        return [forced]
-    order = [e for e in os.environ.get("VOICE_ORDER", "").lower().replace(" ", "").split(",") if e in ENGINES]
-    if order:
-        return order
-    return ["edge", "kokoro"] if LANG == "hi" else ["kokoro", "edge"]       # Hindi mein Edge Neural awaaz zyada saaf bolti hai
+    return [forced] if forced in ENGINES else ["kokoro", "edge"]
 
 
 def synth(text, path, engine):
@@ -201,13 +186,7 @@ def squeeze_silences(x, sr, thr=0.004, max_pause=0.22, win=0.01):
     return np.concatenate([x[: n * hop][mask], x[n * hop:]])
 
 
-_DEV_LETTER = re.compile(r"[\u0904-\u0939\u0958-\u0961]")
-
-
 def _syl(w):
-    d = len(_DEV_LETTER.findall(w))                                # Devanagari: har akshar ~ ek syllable
-    if d:
-        return d
     return max(1, len(re.findall(r"[aeiouy]+", re.sub(r"[^a-z]", "", w.lower()))))
 
 
@@ -217,7 +196,7 @@ def word_times(text, dur, env=None, fps=30):
     words = text.split()
     if not words:
         return []
-    wts = [0.45 * len(re.sub(r"[^\w" + DEV + "]", "", w)) + _syl(w) + 0.3 for w in words]
+    wts = [0.45 * len(re.sub(r"\W", "", w)) + _syl(w) + 0.3 for w in words]
     tot = sum(wts)
     fr = np.concatenate([[0.0], np.cumsum(wts)]) / tot
     if env is not None and len(env) > 4:
@@ -284,24 +263,6 @@ def build(scenes, tmp, fps=30, **kw):
     raise RuntimeError("voice fail: " + " | ".join(errs))
 
 
-def caption_words(sc, n):
-    """Roman Urdu caption: bolne wale text se bilkul barabar lafz hon to wahi dikhate hain (punctuation bolne wale text se),
-    warna None -> text hi caption banta hai (Devanagari)."""
-    if CAPTION_SCRIPT != "roman":
-        return None
-    cap = str(sc.get("caption") or "").split()
-    if len(cap) != n:
-        return None
-    return cap
-
-
-def _merge_caption(cap_word, spoken_word):
-    tail = re.search(r"[.,!?;:\u0964\u0965]+$", spoken_word)
-    core = re.sub(r"[.,!?;:\u0964\u0965]+$", "", cap_word)
-    p = (tail.group(0)[-1] if tail else "").replace("\u0964", ".").replace("\u0965", ".")
-    return core + p
-
-
 def _build(eng, scenes, tmp, fps=30, gap=0.10, lead=0.25, tail=0.40):
     """Har scene: wav banata hai, scene ki 'hold' = voice length + gap. Returns (voice_mix_array@SR, per-scene info)."""
     chunks, info, t = [], [], 0.0
@@ -319,9 +280,6 @@ def _build(eng, scenes, tmp, fps=30, gap=0.10, lead=0.25, tail=0.40):
         hold = pre + d + post
         env, vis = analyze(x, SR, fps)
         wt = [(w, pre + a, pre + b) for w, a, b in word_times(sc["text"], d, env, fps)]
-        cap = caption_words(sc, len(wt))
-        if cap:                                                   # awaaz Devanagari text se, screen par Roman Urdu
-            wt = [(_merge_caption(c, w), a, b) for c, (w, a, b) in zip(cap, wt)]
         info.append(dict(start=t, hold=hold, words=wt, env=env, vis=vis, env_off=pre, voice_off=pre))
         chunks.append((t + pre, x))
         t += hold
