@@ -1,4 +1,4 @@
-name: Daily Office Toon Short
+name: Daily Parable Explainer Short
 
 on:
   schedule:
@@ -89,10 +89,22 @@ jobs:
           path: ~/.cache/huggingface
           key: hf-kokoro-82m-v1
 
-      - name: Generate office comedy scene JSON (Gemini)
+      - name: Generate parable explainer scene JSON (Gemini)
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: python story_gen.py
+
+      - name: Show generated story (check karo office to nahi)
+        run: |
+          python - <<'PY'
+          import json
+          d = json.load(open("script.json", encoding="utf-8"))
+          print("TOPIC:", d.get("topic"))
+          print("TITLE:", d.get("title"))
+          print("FACT :", d.get("fact"))
+          for i, s in enumerate(d["scenes"], 1):
+              print(i, s.get("place"), "|", s.get("camera_move"), "|", " / ".join(f'{c["name"]}: {c["line"]}' for c in s["characters"]))
+          PY
 
       - name: Render video (45 min se kam)
         timeout-minutes: 45
