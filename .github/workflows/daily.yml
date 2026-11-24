@@ -2,7 +2,7 @@ name: Daily Office Toon Short
 
 on:
   schedule:
-    # Har 2 din mein ek baar (day-of-month */2). Ghanta/minute random hoga script ke andar.
+    # Har 2 din mein ek baar. Ghanta/minute random hoga script ke andar.
     - cron: "0 0 */2 * *"
   workflow_dispatch:
     inputs:
@@ -19,8 +19,6 @@ concurrency:                 # do runs ek saath na chalein (history.json push co
   cancel-in-progress: false
 
 env:
-  # Pehle 240 min tak sleep hota tha = har run ke runner minutes zaya (private repo par 2000 free min/month hi hote hain).
-  # GitHub cron khud bhi kuch minute late hota hai, isliye 15 min ka jitter kaafi hai.
   MAX_DELAY_MIN: "15"
   DO_UPLOAD: ${{ (github.event_name == 'workflow_dispatch' && inputs.upload == false) && 'false' || 'true' }}
 
@@ -32,7 +30,7 @@ jobs:
       - name: Random wait (sirf scheduled run par)
         if: github.event_name == 'schedule'
         run: |
-          # Random hour (0-23), random minute (0-59), random second (0-59) — poora din random
+          # Random hour/minute/second — poora din random
           RAND_H=$((RANDOM % 24))
           RAND_M=$((RANDOM % 60))
           RAND_S=$((RANDOM % 60))
@@ -40,7 +38,6 @@ jobs:
           NOW_M=$(date +%M)
           NOW_S=$(date +%S)
 
-          # Aaj ke random target time tak ke seconds nikalo (agar beet gaya to agle din ka)
           TARGET_SEC=$(( RAND_H*3600 + RAND_M*60 + RAND_S ))
           NOW_SEC=$(( 10#$NOW_H*3600 + 10#$NOW_M*60 + 10#$NOW_S ))
           DELAY=$(( TARGET_SEC - NOW_SEC ))
@@ -48,7 +45,7 @@ jobs:
             DELAY=$(( DELAY + 86400 ))
           fi
 
-          # Safety cap: runner minutes bachane ke liye max 6 ghante se zyada sleep mat karo
+          # Safety cap: runner minutes bachane ke liye max 6 ghante
           MAX_SLEEP=$(( 6*3600 ))
           if [ "$DELAY" -gt "$MAX_SLEEP" ]; then
             DELAY=$(( MAX_SLEEP ))
@@ -79,7 +76,7 @@ jobs:
           cache: pip
 
       - name: Install system packages
-        run: sudo apt-get update && sudo apt-get install -y ffmpeg espeak-ng fonts-dejavu-core   # caption font repo ke fonts/ folder mein hai
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg espeak-ng fonts-dejavu-core
 
       - name: Install dependencies
         run: |
@@ -101,11 +98,9 @@ jobs:
         timeout-minutes: 45
         env:
           MUSIC_MODE: synth
-          # har character ki apni awaaz toon/characters.py mein hai (voice/edge). SINGLE_VOICE=1 se sab ek hi awaaz mein
           KOKORO_VOICE: am_michael
-          EDGE_VOICE: en-US-GuyNeural
-          SINGLE_VOICE: "0"
-          VOICE_SPEED: "1.05"            # video 60s se kam rahe; lambi ho to 1.1 try karo
+          EDGE_VOICE: en-US-GuyNeural    # Kokoro fail ho to backup awaaz
+          VOICE_SPEED: "1.0"
           HF_HUB_DISABLE_TELEMETRY: "1"
         run: |
           fc-cache -f
@@ -127,6 +122,7 @@ jobs:
           path: |
             output.mp4
             script.json
+            story_plan.md
           retention-days: 2
           if-no-files-found: ignore
 
@@ -136,4 +132,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add history.json
-          git diff --cached --quiet || (git commit -m "update topic history" && git pull --rebase && git push)
+          git diff --cached --quiet || git commit -m "update topic history"
+          # --autostash: render ki banayi baaki badli hui files pull ke dauran side par rakh deta hai
+          git pull --rebase --autostash
+          git push
