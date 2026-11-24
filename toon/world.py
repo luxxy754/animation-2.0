@@ -22,7 +22,7 @@ except Exception:
 
 
 # ======================================================================= REFERENCE STYLE PATCH
-USE_DYNAMIC_WORLDS = os.environ.get("USE_DYNAMIC_WORLDS", "0") == "1"   # 1 = purana khaali outdoor world_spec wapas
+USE_DYNAMIC_WORLDS = os.environ.get("USE_DYNAMIC_WORLDS", "0") == "1"   # 1 = Gemini ke apne (bina preset) world_spec bhi dynamic chalein
 OUTLINE_W = .034                                                       # mota cartoon outline (pehle .018)
 SAT, CONTRAST = 1.22, 1.07                                             # colour grade (reference jaisa saturated)
 FACE = (232, 242, 250)                                                 # BGR cream-safed chehra
@@ -149,12 +149,13 @@ def _dynamic_room(spec):
             "intensity": 1.0
         }]
     slots = {}
+    # Slots camera ke frame mein rahen (pehle w*.25 tha: 18m wide world mein characters frame se bahar chale jate the)
     xmap = {
-        "left": -w * .25, "center": 0.0, "right": w * .25,
-        "far": 0.0, "seat": -w * .12
+        "left": -1.15, "center": 0.0, "right": 1.15,
+        "far": 0.6, "seat": -0.8
     }
-    zmap = {"left": d * .42, "center": d * .32, "right": d * .42,
-            "far": d * .70, "seat": d * .32}
+    zmap = {"left": d * .33, "center": d * .31, "right": d * .33,
+            "far": d * .52, "seat": d * .31}
     for name in ("left", "center", "right", "far", "seat"):
         slots[name] = {"pos": (xmap[name], zmap[name])}
     return {
@@ -179,8 +180,8 @@ def _location(scene):
         raw = loc
     if raw is not None:
         clean = validate_world_spec(raw)
-        if clean is not None and USE_DYNAMIC_WORLDS:
-            return None, clean
+        if clean is not None and (USE_DYNAMIC_WORLDS or (isinstance(raw, dict) and raw.get("preset"))):
+            return None, clean                                  # story_gen ke PRESETS (village, island...) dynamic hi rahenge
         if clean is not None:                                   # dynamic world -> sabse qareeb rich fixed room
             return ROOMS.get(nearest_fixed_room(clean), ROOMS["office"]), None
         fallback = nearest_fixed_room(raw)
@@ -279,8 +280,9 @@ def render_scene(frame_idx, fps, scene, talk_lookup=None, t_offset=0.0):
 
     if spec is not None:
         # Dynamic background, props aur unke cast shadows.
+        raw_spec = scene.get("world_spec")                       # draw_world khud validate karta hai: clean (BGR) dobara dene se rang ulte ho jate the
         if not draw_world(
-            r, spec, t,
+            r, raw_spec if isinstance(raw_spec, dict) else spec, t,
             {k: v["pos"] for k, v in room["slots"].items()},
             (float(cam.pos[0]), float(cam.pos[2]))
         ):
