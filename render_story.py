@@ -84,7 +84,7 @@ def make_subscribe():
     d.polygon([(70, 45), (70, 115), (130, 80)], fill=(255, 255, 255, 255))
     d.text((165, 80), "SUBSCRIBE", font=font(66), fill=(255, 255, 255, 255), anchor="lm")
     d.rounded_rectangle([150, 168, 630, 220], radius=24, fill=(8, 8, 14, 215))
-    d.text((390, 195), "FOLLOW FOR MORE OFFICE CHAOS", font=font(26), fill=(255, 214, 40, 255), anchor="mm")
+    d.text((390, 195), "FOLLOW FOR MORE STORIES", font=font(26), fill=(255, 214, 40, 255), anchor="mm")
     return np.asarray(im).astype(np.float32)[..., [2, 1, 0, 3]]
 
 
