@@ -1,0 +1,10 @@
+requests
+Pillow
+numpy
+opencv-python-headless
+soundfile
+kokoro>=0.9.4          # sirf awaaz (voice.py); torch workflow mein CPU wheel se lagta hai
+edge-tts               # Kokoro fail ho to backup awaaz
+google-api-python-client
+google-auth
+google-auth-httplib2
