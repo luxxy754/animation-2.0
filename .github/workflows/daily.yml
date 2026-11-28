@@ -2,8 +2,9 @@ name: Daily Parable Explainer Short
 
 on:
   schedule:
-    # Har 2 din mein ek baar. Ghanta/minute random hoga script ke andar.
-    - cron: "0 0 */2 * *"
+    # Har ghante chalta hai, lekin "decide" job sirf 5 sec mein faisla karti hai.
+    # Har 2 din mein ek baar, ek random ghante mein asli kaam hota hai.
+    - cron: "7 * * * *"
   workflow_dispatch:
     inputs:
       upload:
@@ -23,38 +24,49 @@ env:
   DO_UPLOAD: ${{ (github.event_name == 'workflow_dispatch' && inputs.upload == false) && 'false' || 'true' }}
 
 jobs:
+  decide:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    outputs:
+      go: ${{ steps.pick.outputs.go }}
+    steps:
+      - name: Aaj is ghante chalna hai ya nahi?
+        id: pick
+        run: |
+          # Manual run: hamesha chalao
+          if [ "${{ github.event_name }}" != "schedule" ]; then
+            echo "Manual run -> go"
+            echo "go=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          DAYS=$(( $(date -u +%s) / 86400 ))
+          HOUR=$(( 10#$(date -u +%H) ))
+
+          # Har 2 din mein ek baar
+          if [ $(( DAYS % 2 )) -ne 0 ]; then
+            echo "Aaj upload ka din nahi hai -> skip"
+            echo "go=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # Is din ka random ghanta (din se seed, to har ghante wahi jawab aata hai)
+          HASH=$(echo "shorts-$DAYS" | md5sum | cut -c1-8)
+          TARGET=$(( 16#$HASH % 24 ))
+          echo "Aaj ka random ghanta: $TARGET:xx UTC | abhi: $HOUR UTC"
+
+          if [ "$HOUR" -eq "$TARGET" ]; then
+            echo "go=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "go=false" >> "$GITHUB_OUTPUT"
+          fi
+
   build-and-upload:
+    needs: decide
+    if: needs.decide.outputs.go == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 75
     steps:
-      - name: Random wait (sirf scheduled run par)
-        if: github.event_name == 'schedule'
-        run: |
-          # Random hour/minute/second — poora din random
-          RAND_H=$((RANDOM % 24))
-          RAND_M=$((RANDOM % 60))
-          RAND_S=$((RANDOM % 60))
-          NOW_H=$(date +%H)
-          NOW_M=$(date +%M)
-          NOW_S=$(date +%S)
-
-          TARGET_SEC=$(( RAND_H*3600 + RAND_M*60 + RAND_S ))
-          NOW_SEC=$(( 10#$NOW_H*3600 + 10#$NOW_M*60 + 10#$NOW_S ))
-          DELAY=$(( TARGET_SEC - NOW_SEC ))
-          if [ "$DELAY" -le 0 ]; then
-            DELAY=$(( DELAY + 86400 ))
-          fi
-
-          # Safety cap: runner minutes bachane ke liye max 6 ghante
-          MAX_SLEEP=$(( 6*3600 ))
-          if [ "$DELAY" -gt "$MAX_SLEEP" ]; then
-            DELAY=$(( MAX_SLEEP ))
-          fi
-
-          echo "Random target: ${RAND_H}:${RAND_M}:${RAND_S} UTC | abhi: ${NOW_H}:${NOW_M}:${NOW_S} UTC"
-          echo "Sleeping $((DELAY / 3600))h $(( (DELAY % 3600) / 60 ))m $((DELAY % 60))s"
-          sleep "$DELAY"
-
       - uses: actions/checkout@v4
 
       - name: Check required secrets
